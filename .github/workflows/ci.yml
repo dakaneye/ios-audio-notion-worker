@@ -1,0 +1,10 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    uses: dakaneye/hookshot/.github/workflows/node-ci.yml@5c330982fa74bb2d99f51cd3e8217362d9ebd1d6

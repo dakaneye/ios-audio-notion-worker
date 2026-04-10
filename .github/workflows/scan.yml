@@ -1,0 +1,14 @@
+name: Monthly Scan
+
+on:
+  schedule:
+    - cron: '0 8 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  scan:
+    uses: dakaneye/hookshot/.github/workflows/scan.yml@v1
