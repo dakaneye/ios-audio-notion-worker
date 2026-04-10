@@ -1,0 +1,12 @@
+name: Dependabot Auto-Merge
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    uses: dakaneye/hookshot/.github/workflows/dependabot-auto-merge.yml@v1
