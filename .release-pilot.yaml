@@ -1,0 +1,7 @@
+ecosystem: node
+model: claude-sonnet-4-6
+notes:
+  include-diffs: false
+github:
+  draft: false
+  prerelease: false
