@@ -8,3 +8,8 @@ on:
 jobs:
   ci:
     uses: dakaneye/hookshot/.github/workflows/node-ci.yml@5c330982fa74bb2d99f51cd3e8217362d9ebd1d6
+    with:
+      # Cloudflare Worker: wrangler handles TS compilation at deploy time, no build step needed
+      build-command: ""
+      # No unit tests yet; validation is via wrangler dev + manual smoke tests against Notion
+      skip-test: true

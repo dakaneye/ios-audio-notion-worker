@@ -15,4 +15,4 @@ jobs:
   analyze:
     uses: dakaneye/hookshot/.github/workflows/codeql.yml@v1
     with:
-      languages: '['javascript']'
+      languages: '["javascript"]'
