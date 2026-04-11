@@ -1,6 +1,10 @@
 name = "ios-audio-notion-worker"
 main = "src/index.ts"
 compatibility_date = "2025-10-01"
+compatibility_flags = ["nodejs_compat"]
 
 [observability]
 enabled = true
+
+[ai]
+binding = "AI"
