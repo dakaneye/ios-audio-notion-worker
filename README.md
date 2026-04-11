@@ -92,6 +92,31 @@ npx wrangler deploy
 
 Wrangler prints the deployed URL. Point your iOS Shortcut's **Get Contents of URL** action at it.
 
+## Transcription cron
+
+In addition to the upload proxy, the Worker runs a nightly scheduled handler that sweeps the configured Notion database for rows with audio but no transcription, transcribes them via Cloudflare Workers AI Whisper (`@cf/openai/whisper-large-v3-turbo`), and writes the result into the Note property.
+
+- **Schedule:** `0 6 * * *` UTC = 11 PM PDT / 10 PM PST. The schedule is fixed in UTC, so the local firing time drifts by one hour between DST and standard time — acceptable for a personal habit tool.
+- **Idempotency:** rows are matched by the filter `<AudioProperty>.files.is_not_empty AND <NoteProperty>.rich_text.is_empty`. On success the Note gets populated, moving the row out of the filter. On failure after 3 retries, an error sentinel is written to Note so the row stops being picked up.
+- **Retries:** per row, 3 attempts with `[1s, 2s]` exponential backoff around the `fetch → base64 → Whisper` unit. The final attempt does not sleep afterwards; if it fails, the error is surfaced to the Note field.
+- **Size cap:** 5 MB hard cap enforced before Whisper is called. Files larger than this get a `[transcription skipped: audio exceeds 5000000 bytes]` sentinel in Note and are not sent to Whisper. (Note: Notion's single-part upload limit is ~5.24 MB, so in practice the useful size-cap window is between 5 MB and 5.24 MB; anything larger is rejected upstream at upload time before reaching the cron.)
+- **Throughput:** up to 5 rows per cron invocation. Backlogs greater than 5 are processed one batch per 24 hours.
+- **Sentinel truncation:** error sentinels are truncated to 2000 characters (Notion rich_text block limit) to prevent a long Whisper/Notion error body from breaking the PATCH that surfaces the failure.
+- **Observability:** structured JSON events emitted on every row (`row_transcribed`, `row_failed`, `row_skipped`) plus a summary `query` event per run. Visible in the Cloudflare Workers Observability dashboard.
+
+No external API keys needed — Workers AI uses the account binding (`[ai] binding = "AI"`), no `OPENAI_API_KEY` secret to manage.
+
+### Configuration for the cron
+
+Two optional environment variables (configured as Worker vars or secrets) let you point the cron at a different schema without forking the code:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `TRANSCRIBE_AUDIO_PROPERTY` | `"Audio"` | Name of the files & media property the cron reads from. |
+| `TRANSCRIBE_NOTE_PROPERTY` | `"Note"` | Name of the rich_text property the cron writes transcriptions to. |
+
+Both are optional. If you use different property names in your Notion DB, set them via `wrangler secret put` or the Cloudflare dashboard.
+
 ## iOS Shortcut outline
 
 A four-action Shortcut is enough:

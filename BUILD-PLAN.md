@@ -20,7 +20,13 @@ Design choices made:
 ┌─────────────────┐      POST /          ┌──────────────────────┐     Notion API      ┌──────────┐
 │  iOS Shortcut   │ ──── multipart ────> │  Cloudflare Worker   │ ─── 3 calls ──────> │  Notion  │
 │ (audio + date)  │                      │ ios-audio-notion-... │                     │ Home Log │
-└─────────────────┘                      └──────────────────────┘                     └──────────┘
+└─────────────────┘                      │                      │                     └──────────┘
+                                         │  fetch()             │
+                                         │  scheduled()    <─── │ ← cron 0 6 * * * UTC
+                                         └──┬───────────────────┘
+                                            ▼
+                                         Workers AI
+                                         Whisper large v3 turbo
 ```
 
 1. iOS Shortcut captures audio via **Record Audio** and formats today's date.
@@ -144,6 +150,32 @@ cd ~/dev/personal/ios-audio-notion-worker && npx wrangler tail
 
 …then re-run the Shortcut — you'll see the request come in and any Notion API errors.
 
+## Piece 5: Transcription cron (~automatic, already running)
+
+The Worker runs a nightly scheduled handler at `0 6 * * *` UTC (11 PM PDT / 10 PM PST) that sweeps the Home Log database for rows with audio but no transcription, transcribes them via Cloudflare Workers AI Whisper, and writes the transcribed text into the `Note` property.
+
+- **No manual action needed.** Record audio via the iOS Shortcut at 9pm, Notion row appears immediately, transcription shows up in the Note field by the following morning.
+- **Failure modes:** if a row fails to transcribe after 3 retries with exponential backoff, the error message is written into the Note field itself (e.g., `[transcription failed after 3 attempts: <reason>]`, truncated to 2000 chars). The row then stops being picked up. To retry: clear the Note manually in the Notion UI.
+- **Observability:** structured logs per cron run in the Cloudflare Workers Observability dashboard. Query by `event:row_transcribed`, `event:row_failed`, `event:row_skipped`, or `event:query`.
+- **Max audio length:** 5 MB hard cap before Whisper is called. Longer recordings get a skip sentinel and no transcription. (Notion's upstream single-part upload limit is ~5.24 MB, so the practical max is always ≤ 5.24 MB regardless.)
+- **Privacy:** audio never leaves Cloudflare. The `@cf/openai/whisper-large-v3-turbo` model runs on Cloudflare's own infrastructure.
+
+To manually trigger the cron for testing (without waiting for 11pm):
+
+```bash
+cd ~/dev/personal/ios-audio-notion-worker
+npx wrangler dev --test-scheduled --port 8799
+# in another terminal:
+curl "http://127.0.0.1:8799/__scheduled?cron=0+6+*+*+*"
+```
+
+Note: wrangler 4.81.1 removed the old `wrangler cron trigger` subcommand. The `--test-scheduled` flag + `/__scheduled` endpoint is the current equivalent for local testing. For production triggers without the schedule, use the Cloudflare dashboard's "Send event" button on the Worker's Triggers page.
+
+To tail live production logs:
+```bash
+npx wrangler tail
+```
+
 ## Common failures and fixes
 
 | Symptom | Most likely cause | Fix |
@@ -172,6 +204,8 @@ cd ~/dev/personal/ios-audio-notion-worker && npx wrangler tail
 - Worker local dev: `~/dev/personal/ios-audio-notion-worker/` (run `npx wrangler dev` with `.dev.vars` populated)
 - Home Log Notion DB: https://www.notion.so/03f684ffe7b54efbad468fbf287d26fb
 - Parent page (Family): https://www.notion.so/32835e566abf81b38745ea169f2e55b0
+- Transcription design spec: `docs/superpowers/specs/2026-04-10-transcription-cron-design.md`
+- Transcription implementation plan: `docs/superpowers/plans/2026-04-10-transcription-cron-plan.md`
 - Notion API docs (pages.create): https://developers.notion.com/reference/post-page
 - Notion API docs (file uploads): https://developers.notion.com/reference/file-upload
 - Notion Internal Integrations: https://www.notion.so/my-integrations
