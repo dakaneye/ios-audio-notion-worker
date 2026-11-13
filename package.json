@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261103.1",
+    "@cloudflare/workers-types": "^5.20261110.1",
     "typescript": "^7.0.2",
     "wrangler": "^4.157.0"
   }
